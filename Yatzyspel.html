@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            text-align: center;
+        }
+        #dice-container {
+            text-align: center;
+        }
+        #dice {
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #scorecard {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .score-row {
+            width: 300px;
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .score-row:nth-child(odd) {
+            background-color: #f2f2f2;
+        }
+        .score-row:last-child {
+            margin-bottom: 0;
+        }
+        .dice-value {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            margin: 0 5px;
+            text-align: center;
+            line-height: 30px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        
+        .locked {
+            background-color: red;
+        }
+        
+    </style>
+    <title>Yatzy</title>
+</head>
+<body>
+    <h1>Yatzy</h1>
+    <div id="dice-container">
+        <button onclick="rollDice()">Kasta tärningar</button>
+        <p id="rolls-left">Kast kvar: 3</p>
+        <div id="dice">
+            <span class="dice-value">1</span>
+            <span class="dice-value">2</span>
+            <span class="dice-value">3</span>
+            <span class="dice-value">4</span>
+            <span class="dice-value">5</span>
+        </div>
+    </div>
+    <div id="scorecard">
+    </div>
+    <p id="Runda">Runda: 1/16</p>
+    <p id="total-score"> Total Score: </p>
+   <button onclick="toggleStrikeMode()">Stryk</button>
+
+    
+    <script>
+    var scorecard = {
+    "Ettor": null,
+    "Tvåor": null,
+    "Treor": null,
+    "Fyror": null,
+    "Femmor": null,
+    "Sexor": null,
+    "Par": null,
+    "Två Par": null,
+    "Tretal": null,
+    "Fyrtal": null,
+    "Kåk": null,
+    "Liten Stege": null,
+    "Stor Stege": null,
+    "Chans": null,
+    "Yatzy": null
+};
+var playerScores = {}; //objekt för att spara spelarnas poäng
+var rollsLeft; //antal kast kvar
+var diceValues = []; //global variabel för att lagra tärningsvärden
+var lockedDice = []; //array för att lagra information om låsta tärningar
+var roundNum = 1; //bariabel för att hålla koll på vilken runda spelaren är i
+var lockedCombinations = {}; //objekt för att spara information om låsta kombinationer
+var strikeMode = false; //variabel för att hålla reda på om vi är i "stryk" läge
+
+
+function rollDice() {
+    if (rollsLeft > 0) {
+        if (!diceValues || diceValues.length === 0) {
+            //initialisera diceValues om det är första kastet eller om det är odefinierat
+            diceValues = Array(5).fill(0); //fyll med nollar för att undvika undefined
+        }
+        
+        for (var i = 0; i < 5; i++) {
+            if (!isDiceLocked(i)) {
+                diceValues[i] = Math.floor(Math.random() * 6) + 1;
+            }
+        }
+        displayDice(diceValues); //visa de nya tärningsvärdena
+        rollsLeft--;
+        var rollsLeftElement = document.getElementById("rolls-left");
+        if (rollsLeftElement) {
+            rollsLeftElement.innerText = "Kast kvar: " + rollsLeft;
+        } else {
+            console.error("Elementet 'rolls-left' hittades inte.");
+        }
+    } else {
+        endTurn();
+    }
+}
+
+function displayDice(diceValues) {
+    var diceContainer = document.getElementById("dice");
+    diceContainer.innerHTML = ""; //rensa tidigare tärningar
+    for (var i = 0; i < diceValues.length; i++) {
+        var diceText = document.createElement("span");
+        diceText.innerText = diceValues[i];
+        diceText.className = "dice-value";
+        diceText.dataset.index = i; //spara tärningens index som en dataset för att identifiera den senare
+        diceText.addEventListener("click", toggleLockDice); //lägg till händelsehanterare för klick på tärningen
+        if (isDiceLocked(i)) {
+            diceText.classList.add("locked");
+            diceText.style.backgroundColor = lockedDice[i].color; //använd den lagrade färgen för låsta tärningar
+        }
+        diceContainer.appendChild(diceText);
+    }
+}
+
+function toggleLockDice(event) {
+    var diceIndex = parseInt(event.target.dataset.index);
+    var dice = event.target;
+    if (dice.classList.contains("locked")) {
+        dice.classList.remove("locked");
+        dice.style.backgroundColor = ""; //återställ färgen till standard
+        unlockDice(diceIndex);
+    } else {
+        dice.classList.add("locked");
+        dice.style.backgroundColor = "red"; //ändra färgen till röd för att indikera att tärningen är låst
+        lockDice(diceIndex, "red"); //lås tärningen och lagra dess färg
+    }
+}
+
+function getSelectedDiceValues() {
+    var selectedDiceValues = [];
+    var diceContainer = document.getElementById("dice");
+    var diceElements = diceContainer.getElementsByClassName("dice-value");
+    for (var i = 0; i < diceElements.length; i++) {
+        var dice = diceElements[i];
+        if (dice.classList.contains("locked")) {
+            selectedDiceValues.push(parseInt(dice.innerText));
+        }
+    }
+    return selectedDiceValues;
+}
+
+
+
+function updateRoundNumb(){
+    var rundaElement = document.getElementById("Runda");
+        if (rundaElement) {
+            rundaElement.innerText = "Runda" + runda;
+        } else {
+            console.error("Elementet 'Runda' hittades inte.");
+        }
+}
+   
+function lockDice(index, color) {
+    lockedDice[index] = { locked: true, color: color };
+}
+
+function unlockDice(index) {
+    lockedDice[index] = { locked: false, color: "" };
+}
+
+function isDiceLocked(index) {
+    return lockedDice[index] && lockedDice[index].locked;
+}
+
+function endTurn(combinationName) {
+    var selectedTextBox = event.target; //referens till den text box du klickar på
+    // Kontrollera om vi är i strykläge
+    if (strikeMode) {
+        markCombinationAsZero(combinationName); // Markera kombinationen som 0 om vi är i strykläge
+        return; // Avsluta funktionen efter att ha markerat kombinationen som 0
+    }
+    if (combinationName) {
+        if (!lockedCombinations[combinationName]) { // Kontrollera om kombinationen redan är låst
+            if (!strikeMode) { // Kontrollera om vi inte är i strykläge
+                var isValidCombination = validateCombination(combinationName, diceValues);
+                if (!isValidCombination) {
+                    alert("Det valda kombinationen är inte giltig för de givna tärningsvärdena. Vänligen välj en annan kombination.");
+                    return; // Avsluta funktionen om kombinationen inte är giltig och vi inte är i strykläge
+                }
+            }
+            var score = calculateScore(combinationName, diceValues);
+            if (score !== null) {
+                scorecard[combinationName] = score;
+                selectedTextBox.innerText = scorecard[combinationName];
+                roundNum++;
+                rollsLeft = 3;
+                document.getElementById("rolls-left").innerText = "Kast kvar: " + rollsLeft;
+                document.getElementById("Runda").innerText = "Runda: " + roundNum + "/16";
+                lockedCombinations[combinationName] = true; // Markera kombinationen som låst
+                displayScorecard();
+                displayPlayerChoice(combinationName);
+                var totalScore = calculateTotalScore();
+                var totalScoreElement = document.getElementById("total-score");
+                if (!totalScoreElement) {
+                    totalScoreElement = document.createElement("p");
+                    totalScoreElement.id = "total-score";
+                    document.body.appendChild(totalScoreElement);
+                }
+                totalScoreElement.innerText = "Total Score: " + totalScore;
+                resetDice();
+                displayDice();
+                if (roundNum >= 16) {
+                    endGame(); 
+                    return;
+                }
+            } else {
+                alert("Poängen kan inte vara null. Välj en annan kombination.");
+            }
+        } else {
+            alert("Kombinationen är redan låst för denna omgång.");
+        }
+    } else {
+        alert("Vänligen välj en kombination innan du fortsätter till nästa runda.");
+    }
+}
+
+function endGame() {
+    var totalScore = calculateTotalScore();
+    alert("Spelet är över! Din totala poäng är: " + totalScore);
+    
+    // Visa total poäng
+    var totalScoreElement = document.getElementById("total-score");
+    if (!totalScoreElement) {
+        totalScoreElement = document.createElement("p");
+        totalScoreElement.id = "total-score";
+        document.body.appendChild(totalScoreElement);
+    }
+    totalScoreElement.innerText = "Total Score: " + totalScore;
+}
+
+function displayScorecard() {
+    var scorecardDiv = document.getElementById("scorecard");
+    var currentRound = roundNum;
+    console.log("runda", currentRound);
+    scorecardDiv.innerHTML = "";
+    for (var combination in scorecard) {
+        var scoreRow = document.createElement("div");
+        scoreRow.className = "score-row";
+        scoreRow.innerHTML = "<span>" + combination + ":</span><span>" + (scorecard[combination] !== null ? scorecard[combination] : "") + "</span>";
+        scorecardDiv.appendChild(scoreRow);
+
+        //använd en anonym funktion eller en closure för att binda combinationName till varje händelselyssnare
+        (function(combinationName) {
+            scoreRow.addEventListener('click', function() {
+                endTurn(combinationName); //kalla endTurn() med kombinationsnamnet
+            });
+        })(combination);
+    }
+}   
+
+//funktion för att aktivera/deaktivera stryk-läge
+function toggleStrikeMode() {
+    strikeMode = !strikeMode;
+    if (strikeMode) {
+        document.getElementById("message").innerText = "Klicka på en kombination för att stryka den.";
+    } else {
+        document.getElementById("message").innerText = "";
+    }
+}
+
+//funktion för att markera en kombination som 0 om vi är i stryk-läge
+function markCombinationAsZero(combinationName) {
+    if (strikeMode && combinationName && scorecard.hasOwnProperty(combinationName)) {
+        if (!lockedCombinations[combinationName]) {
+            scorecard[combinationName] = 0;
+            lockedCombinations[combinationName] = true;
+            roundNum++;
+            document.getElementById("Runda").innerText = "Runda: " + roundNum + "/16";
+            document.getElementById("rolls-left").innerText = "Kast kvar: 3";
+            rollsLeft = 3;
+            resetDice();
+            displayDice();
+            displayScorecard();
+             if (roundNum >= 16) {
+                    endGame(); 
+                    return;
+                }
+            toggleStrikeMode(); //stäng av stryk-läget efter att en kombination har strukits
+        } else {
+            alert("Denna kombination är redan struken.");
+        }
+    } else if (strikeMode && (!combinationName || !scorecard.hasOwnProperty(combinationName))) {
+        alert("Ogiltig kombination. Försök igen.");
+    }
+}
+
+function displayPlayerChoice(combinationName) {
+    var playerChoiceElement = document.createElement("div");
+    playerChoiceElement.className = "player-choice";
+    document.body.appendChild(playerChoiceElement);
+}
+function validateCombination(combinationName, diceValues) {
+    switch (combinationName) {
+        case "Ettor":
+            return diceValues.some(die => die === 1);   
+        case "Tvåor":
+            return diceValues.some(die => die === 2);
+        case "Treor":
+            return diceValues.some(die => die === 3);
+        case "Fyror":
+            return diceValues.some(die => die === 4);
+        case "Femmor":
+            return diceValues.some(die => die === 5);
+        case "Sexor":
+            // För enskilda nummerkombinationer måste tärningsvärdena innehålla det valda numret
+            return diceValues.some(die => die === 6);
+        case "Par":
+            // För par måste det finnas minst två tärningar med samma värde
+            return diceValues.some((die, index) => diceValues.slice(index + 1).includes(die));
+        case "Två Par":
+            // För två par måste det finnas minst fyra tärningar med samma värde, vilket betyder att det måste finnas minst två par
+            var sortedDice = diceValues.slice().sort((a, b) => a - b);
+            var pairCount = 0;
+            for (var i = 0; i < sortedDice.length - 1; i++) {
+                if (sortedDice[i] === sortedDice[i + 1]) {
+                    pairCount++;
+                    i++; //hoppa över nästa tärning eftersom den tillhör paret
+                }
+            }
+            return pairCount >= 2;
+        case "Tretal":
+            // För tretal måste det finnas minst tre tärningar med samma värde
+            return diceValues.some((die, index) => {
+                var count = diceValues.filter(d => d === die).length;
+                return count >= 3;
+            });
+        case "Fyrtal":
+            // För fyrtal måste det finnas minst fyra tärningar med samma värde
+            return diceValues.some((die, index) => {
+                var count = diceValues.filter(d => d === die).length;
+                return count >= 4;
+            });
+            case "Kåk":
+    // För kåk måste det finnas tre tärningar med samma värde och två tärningar med annat värde
+    var sortedDice = diceValues.slice().sort((a, b) => a - b);
+    var threeOfAKind = false;
+    var pair = false;
+    
+    //Kontrollera först om det finns ett tretal
+    for (var i = 0; i < sortedDice.length - 2; i++) {
+        if (sortedDice[i] === sortedDice[i + 1] && sortedDice[i] === sortedDice[i + 2]) {
+            threeOfAKind = true; // Hittade ett tretal
+            break; // Avbryt loopen när ett tretal hittats
+        }
+    }
+    
+    //Om ett tretal hittades, kontrollera om det finns ett par bland de återstående tärningarna
+    if (threeOfAKind) {
+        for (var j = 0; j < sortedDice.length - 1; j++) {
+            if (sortedDice[j] === sortedDice[j + 1]) {
+                pair = true; // Hittade ett par
+                break; // Avbryt loopen när ett par hittats
+            }
+        }
+    }
+    
+    //Om både ett tretal och ett par har hittats, är det en kåk
+    if (threeOfAKind && pair) {
+        //Kåk uppfyllt
+        return true;
+    } else {
+        //Kåk ej uppfyllt
+        return false;
+    }
+            return threeOfAKind && pair;
+        case "Liten Stege":
+            // För liten stege måste alla tärningsvärden vara 1, 2, 3, 4, 5 i någon ordning
+            var uniqueDice = [...new Set(diceValues)]; // Ta bort dubbletter från tärningarna
+            return uniqueDice.length === 5 && uniqueDice.includes(1) && uniqueDice.includes(2) && uniqueDice.includes(3) && uniqueDice.includes(4) && uniqueDice.includes(5);
+        case "Stor Stege":
+            // För stor stege måste alla tärningsvärden vara 2, 3, 4, 5, 6 i någon ordning
+            var uniqueDice = [...new Set(diceValues)]; // Ta bort dubbletter från tärningarna
+            return uniqueDice.length === 5 && uniqueDice.includes(2) && uniqueDice.includes(3) && uniqueDice.includes(4) && uniqueDice.includes(5) && uniqueDice.includes(6);
+        case "Chans":
+            // Chans kan alltid väljas, oavsett tärningsvärden
+            return true;
+        case "Yatzy":
+            //För Yatzy måste alla tärningar ha samma värde
+            return diceValues.every(die => die === diceValues[0]);
+        default:
+            return true; 
+    }
+}
+
+function calculateScore(combination, diceValues) {
+    var score = 0;
+    switch (combination) {
+        case "Ettor": // kollar vilka tärningar som är ettor och räknar ihop dem
+            if (getSelectedDiceValues().every(value => value === 1)) {
+                score = calculateSingleNumberScore(1, getSelectedDiceValues());
+            } else {
+                alert("Fel meddelande: Vänligen välj bara ettor.");
+                score = null;
+            }
+            break;
+
+        case "Tvåor": //kollar om vilka tärningar är tvåor
+        if (getSelectedDiceValues().every(value => value === 2)) {
+                score = calculateSingleNumberScore(2, getSelectedDiceValues());
+            } else {
+                alert("Fel meddelande: Vänligen välj bara tvåor.");
+                score = null;
+            }
+            break;
+            
+        case "Treor":// samma för alla andra calculatescore
+        if (getSelectedDiceValues().every(value => value === 3)) {
+                score = calculateSingleNumberScore(3, getSelectedDiceValues());
+            } else {
+                alert("Fel meddelande: Vänligen välj bara treor.");
+                score = null;
+            }
+            break;
+
+        case "Fyror":
+        if (getSelectedDiceValues().every(value => value === 4)) {
+                score = calculateSingleNumberScore(4, getSelectedDiceValues());
+            } else {
+                alert("Fel meddelande: Vänligen välj bara fyror.");
+                score = null;
+            }
+            break;
+
+        case "Femmor":
+        if (getSelectedDiceValues().every(value => value === 5)) {
+                score = calculateSingleNumberScore(5, getSelectedDiceValues());
+            } else {
+                alert("Fel meddelande: Vänligen välj bara femmor.");
+                score = null;
+            }
+            break;
+
+        case "Sexor":
+        if (getSelectedDiceValues().every(value => value === 6)) {
+                score = calculateSingleNumberScore(6, getSelectedDiceValues());
+            } else {
+                alert("Fel mddelande: Vänligen välj bara sexore.");
+                score = null;
+            }
+            break;
+
+        case "Par":
+        var selectedDiceValues = getSelectedDiceValues();
+        if (selectedDiceValues.length === 2 && selectedDiceValues.every(value => value => 1)) {
+            score = calculatePairScore(selectedDiceValues);
+        } else {
+            alert("Fel meddelande");
+            score = null;
+        }
+            break;
+
+        case "Två Par":
+        var selectedDiceValues = getSelectedDiceValues();
+        if (selectedDiceValues.length === 4 && selectedDiceValues.every(value => value => 1)) {
+            score = calculateTwoPairsScore(selectedDiceValues);
+        } else {
+            alert("Fel meddelande");
+            score = null;
+        }
+            break;
+
+        case "Tretal":
+        var selectedDiceValues = getSelectedDiceValues();
+        if (selectedDiceValues.length === 3 && selectedDiceValues.every(value => value => 1)) {
+            score = calculateThreeOfAKindScore(selectedDiceValues);
+        } else {
+            alert("Fel meddelande");
+            score = null;
+        }
+            break;
+        case "Fyrtal":
+        var selectedDiceValues = getSelectedDiceValues();
+        if (selectedDiceValues.length === 4 && selectedDiceValues.every(value => value => 1)) {
+            score = calculateFourOfAKindScore(selectedDiceValues);
+        } else {
+            alert("Fel meddelande");
+            score = null;
+        }
+            break;
+            case "Kåk":
+    var selectedDiceValues = getSelectedDiceValues();
+    if (selectedDiceValues.length === 5 && selectedDiceValues.every(value => value >= 1)) {
+        score = calculateFullHouseScore(selectedDiceValues);
+    } else {
+        alert("Fel meddelande");
+        score = null;
+    }
+    break;
+
+        case "Liten Stege":
+        var selectedDiceValues = getSelectedDiceValues();
+        if (selectedDiceValues.length === 5 && selectedDiceValues.every(value => value => 1)) {
+            score = calculateSmallStraightScore(selectedDiceValues);
+        } else {
+            alert("Fel meddelande");
+            score = null;
+        }
+            break;
+        case "Stor Stege":
+        var selectedDiceValues = getSelectedDiceValues();
+        if (selectedDiceValues.length === 5 && selectedDiceValues.every(value => value => 1)) {
+            score = calculateLargeStraightScore(selectedDiceValues);
+        } else {
+            alert("Fel meddelande");
+            score = null;
+        }
+            break;
+        case "Chans":
+        var selectedDiceValues = getSelectedDiceValues();
+        if (selectedDiceValues.length === 5 && selectedDiceValues.every(value => value => 1)) {
+            score = calculateChanceScore(selectedDiceValues);
+        } else {
+            alert("Fel meddelande");
+            score = null;
+        }
+            break;
+        case "Yatzy":
+        var selectedDiceValues = getSelectedDiceValues();
+        if (selectedDiceValues.length === 5 && selectedDiceValues.every(value => value => 1)) {
+            score = calculateYatzyScore(selectedDiceValues);
+        } else {
+            alert("Fel meddelande");
+            score = null;
+        }
+            break;
+    }
+    return score;
+}
+
+function calculateTotalScore() {
+    var totalScore = 0;
+    for (var combination in scorecard) {
+        if (scorecard.hasOwnProperty(combination)) {
+            if (scorecard[combination] !== null) {
+                totalScore += scorecard[combination];
+            }
+        }
+    }
+    return totalScore;
+}
+
+
+// Funktion för att räkna poäng för enskilt nummer (Ettor, Tvåor, Treor, etc.)
+function calculateSingleNumberScore(number, diceValues) {
+    var sum = diceValues.reduce((acc, curr) => (curr === number ? acc + number : acc), 0);
+    return sum;
+}
+// Funktion för att räkna poäng för par
+function calculatePairScore(diceValues) {
+    var counts = {};
+    for (var die of diceValues) {
+        counts[die] = (counts[die] || 0) + 1;
+    }
+    var highestPair = 0;
+    for (var die in counts) {
+        if (counts[die] >= 2) {
+            highestPair = Math.max(highestPair, die);
+        }
+    }
+    return highestPair * 2;
+}
+// Funktion för att räkna poäng för två par
+function calculateTwoPairsScore(diceValues) {
+    var sortedDice = diceValues.slice().sort((a, b) => b - a); // Sortera tärningarna i fallande ordning
+    var pairs = [];
+    for (var i = 0; i < sortedDice.length - 1; i++) {
+        if (sortedDice[i] === sortedDice[i + 1]) {
+            pairs.push(sortedDice[i]); // Lägg till paret i listan
+            i++; // Hoppa över nästa tärning eftersom den tillhör paret
+        }
+    }
+    if (pairs.length === 2) {
+        return pairs.reduce((acc, curr) => acc + curr * 2, 0); // Returnera summan av båda paren
+    }
+    return 0; // Om inget eller bara ett par hittades
+}
+// Funktion för att räkna poäng för tretal
+function calculateThreeOfAKindScore(diceValues) {
+    for (var i = 0; i < diceValues.length - 2; i++) {
+        if (diceValues[i] === diceValues[i + 1] && diceValues[i] === diceValues[i + 2]) {
+            return diceValues[i] * 3; // Returnera summan av tretalen
+        }
+    }
+    return 0; // Om inget tretal hittades
+}
+// Funktion för att räkna poäng för fyrtal
+function calculateFourOfAKindScore(diceValues) {
+    for (var i = 0; i < diceValues.length - 3; i++) {
+        if (diceValues[i] === diceValues[i + 1] && diceValues[i] === diceValues[i + 2] && diceValues[i] === diceValues[i + 3]) {
+            return diceValues[i] * 4; // Returnera summan av fyrtalen
+        }
+    }
+    return 0; // Om inget fyrtal hittades
+}
+// Funktion för att räkna poäng för kåk
+function calculateFullHouseScore(diceValues) {
+    var sortedDice = diceValues.slice().sort((a, b) => b - a); // Sortera tärningarna i fallande ordning
+    var threeOfAKind = false;
+    var pair = false;
+    for (var i = 0; i < sortedDice.length - 2; i++) {
+        if (sortedDice[i] === sortedDice[i + 1] && sortedDice[i] === sortedDice[i + 2]) {
+            threeOfAKind = true; // Hittade ett tretal
+            // i += 2; // Hoppa över de två andra tärningarna i tretal
+        } else if (sortedDice[i] === sortedDice[i + 1]) {
+            pair = true; // Hittade ett par
+            i++; // Hoppa över nästa tärning i paret
+        }
+    }
+    if (threeOfAKind && pair) {
+        return sortedDice.reduce((acc, curr) => acc + curr, 0); // Returnera summan av alla tärningar
+    }
+    return 0; // Om inget kåk hittades
+}
+// Funktion för att räkna poäng för liten stege
+function calculateSmallStraightScore(diceValues) {
+    var uniqueDice = [...new Set(diceValues)]; // Ta bort dubbletter från tärningarna
+    if (uniqueDice.length === 5 && uniqueDice.includes(1) && uniqueDice.includes(2) && uniqueDice.includes(3) && uniqueDice.includes(4) && uniqueDice.includes(5)) {
+        return 15; // Returnera summan 15 för liten stege
+    }
+    return 0; // Om ingen liten stege hittades
+}
+// Funktion för att räkna poäng för stor stege
+function calculateLargeStraightScore(diceValues) {
+    var uniqueDice = [...new Set(diceValues)]; // Ta bort dubbletter från tärningarna
+    if (uniqueDice.length === 5 && uniqueDice.includes(2) && uniqueDice.includes(3) && uniqueDice.includes(4) && uniqueDice.includes(5) && uniqueDice.includes(6)) {
+        return 20; // Returnera summan 20 för stor stege
+    }
+    return 0; // Om ingen stor stege hittades
+}
+// Funktion för att räkna poäng för chans
+function calculateChanceScore(diceValues) {
+    return diceValues.reduce((acc, curr) => acc + curr, 0); // Returnera summan av alla tärningar
+}
+// Funktion för att räkna poäng för Yatzy
+function calculateYatzyScore(diceValues) {
+    var firstDie = diceValues[0];
+    for (var i = 1; i < diceValues.length; i++) {
+        if (diceValues[i] !== firstDie) {
+            return 0; // Om inte alla tärningar är lika
+        }
+    }
+    return 50; // Om alla tärningar är lika
+}
+function resetDiceColor() {
+    var diceContainer = document.getElementById("dice");
+    var diceElements = diceContainer.getElementsByClassName("dice-value");
+    for (var i = 0; i < diceElements.length; i++) {
+        var dice = diceElements[i];
+        if (dice.classList.contains("locked")) {
+            dice.classList.remove("locked");
+            dice.style.backgroundColor = ""; // Återställ färgen till standard
+            unlockDice(parseInt(dice.dataset.index)); // Lås upp tärningen
+        }
+    }
+}
+function resetDice() {
+    diceValues = []; // Återställ tärningsvärden till en tom array
+    lockedDice = []; // Återställ informationen om låsta tärningar till en tom array
+    resetDiceColor(); // Återställ färgen på tärningarna
+    
+}
+
+// Initialize the game
+window.onload = function() {
+    rollsLeft = 3; // Sätt antal kast till 3 när spelet startar
+    displayScorecard(); // Visa poängkortet när spelet startar
+    
+};
+
+document.addEventListener("DOMContentLoaded", function() {
+
+    document.getElementById("strike-button").addEventListener("click", toggleStrikeMode);
+
+  
+});
+    </script>
+</body>
+</html>
